@@ -9,10 +9,7 @@ This exact same strategy code can be used for both backtesting and live trading.
 """
 
 from datetime import datetime, timedelta
-from src.strategy.base import Strategy
-from src.core.types import Bar
-from src.data.yahoo_provider import YahooDataProvider
-from src.backtest.engine import BacktestEngine
+from paperhands import Strategy, Bar, YahooDataProvider, BacktestEngine
 
 
 class SMAStrategy(Strategy):

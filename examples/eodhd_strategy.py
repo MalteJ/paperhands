@@ -11,10 +11,7 @@ import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-from src.strategy.base import Strategy
-from src.core.types import Bar
-from src.data.eodhd_provider import EODHDProvider
-from src.backtest.engine import BacktestEngine
+from paperhands import Strategy, Bar, EODHDProvider, BacktestEngine
 
 
 # Load environment variables from .env file

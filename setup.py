@@ -12,7 +12,7 @@ setup(
     description="A backtesting framework for stock and options trading strategies",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    packages=find_packages(),
+    packages=find_packages(include=["paperhands", "paperhands.*"]),
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",

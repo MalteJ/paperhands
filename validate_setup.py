@@ -6,6 +6,10 @@ Run this script to validate your environment and data providers are working.
 
 import sys
 import os
+from pathlib import Path
+
+# Add current directory to path so we can import src
+sys.path.insert(0, str(Path(__file__).parent))
 
 print("=" * 60)
 print("Paperhands Setup Validation")
@@ -14,9 +18,9 @@ print("=" * 60)
 # Check Python version
 print(f"\n1. Python Version: {sys.version}")
 if sys.version_info < (3, 9):
-    print("   ⚠ Warning: Python 3.9+ recommended")
+    print("   [!] Warning: Python 3.9+ recommended")
 else:
-    print("   ✓ Python version OK")
+    print("   [OK] Python version OK")
 
 # Check required packages
 print("\n2. Checking required packages...")

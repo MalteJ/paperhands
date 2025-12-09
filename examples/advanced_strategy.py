@@ -11,11 +11,7 @@ This demonstrates more advanced features:
 
 from datetime import datetime, timedelta
 from typing import Dict
-from src.strategy.base import Strategy
-from src.core.types import Bar, OrderType
-from src.core.events import FillEvent
-from src.data.yahoo_provider import YahooDataProvider
-from src.backtest.engine import BacktestEngine
+from paperhands import Strategy, Bar, OrderType, FillEvent, YahooDataProvider, BacktestEngine
 
 
 class MomentumStrategy(Strategy):
