@@ -9,7 +9,7 @@ This exact same strategy code can be used for both backtesting and live trading.
 """
 
 from datetime import datetime, timedelta
-from paperhands import Strategy, Bar, YahooDataProvider, BacktestEngine
+from paperhands import Strategy, Bar, YahooDataProvider, CachedDataProvider, BacktestEngine
 
 
 class SMAStrategy(Strategy):
@@ -101,7 +101,8 @@ if __name__ == "__main__":
     end_date = datetime.now()
 
     # Create data provider (using Yahoo Finance - free)
-    data_provider = YahooDataProvider()
+    # Wrap with CachedDataProvider to avoid re-fetching on repeated backtests
+    data_provider = CachedDataProvider(YahooDataProvider())
 
     # Create strategy
     strategy = SMAStrategy(symbol=symbol, short_window=20, long_window=50)

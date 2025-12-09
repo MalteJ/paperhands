@@ -11,7 +11,7 @@ import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
-from paperhands import Strategy, Bar, EODHDProvider, BacktestEngine
+from paperhands import Strategy, Bar, EODHDProvider, CachedDataProvider, BacktestEngine
 
 
 # Load environment variables from .env file
@@ -161,8 +161,9 @@ if __name__ == "__main__":
     # Get API key from environment
     api_key = os.getenv("EODHD_API_KEY")
 
-    # Create EODHD data provider
-    data_provider = EODHDProvider(api_key=api_key)
+    # Create EODHD data provider with caching
+    # This avoids re-fetching data on repeated backtests
+    data_provider = CachedDataProvider(EODHDProvider(api_key=api_key))
 
     # Create strategy
     strategy = SimpleBreakoutStrategy(symbol=symbol, lookback=20)

@@ -34,6 +34,7 @@ from paperhands.data.provider import DataProvider
 from paperhands.data.yahoo_provider import YahooDataProvider
 from paperhands.data.alpaca_provider import AlpacaDataProvider
 from paperhands.data.eodhd_provider import EODHDProvider
+from paperhands.data.cached_provider import CachedDataProvider
 
 # Execution
 from paperhands.execution.broker import Broker
@@ -71,6 +72,7 @@ __all__ = [
     "YahooDataProvider",
     "AlpacaDataProvider",
     "EODHDProvider",
+    "CachedDataProvider",
     # Execution
     "Broker",
     "BacktestBroker",

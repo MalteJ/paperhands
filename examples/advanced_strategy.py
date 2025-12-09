@@ -11,7 +11,7 @@ This demonstrates more advanced features:
 
 from datetime import datetime, timedelta
 from typing import Dict
-from paperhands import Strategy, Bar, OrderType, FillEvent, YahooDataProvider, BacktestEngine
+from paperhands import Strategy, Bar, OrderType, FillEvent, YahooDataProvider, CachedDataProvider, BacktestEngine
 
 
 class MomentumStrategy(Strategy):
@@ -154,8 +154,8 @@ if __name__ == "__main__":
     start_date = datetime.now() - timedelta(days=365)
     end_date = datetime.now()
 
-    # Create data provider
-    data_provider = YahooDataProvider()
+    # Create data provider with caching
+    data_provider = CachedDataProvider(YahooDataProvider())
 
     # Create strategy
     strategy = MomentumStrategy(
