@@ -35,6 +35,7 @@ from paperhands.data.yahoo_provider import YahooDataProvider
 from paperhands.data.alpaca_provider import AlpacaDataProvider
 from paperhands.data.eodhd_provider import EODHDProvider
 from paperhands.data.cached_provider import CachedDataProvider
+from paperhands.data.symbols import get_sp500_symbols
 
 # Execution
 from paperhands.execution.broker import Broker
@@ -42,6 +43,24 @@ from paperhands.execution.backtest_broker import BacktestBroker
 
 # Portfolio
 from paperhands.portfolio.portfolio import Portfolio
+
+# Risk management
+from paperhands.risk.atr import ATRCalculator, MultiSymbolATR
+from paperhands.risk.position_sizing import (
+    PositionSizer,
+    FixedFractionalSizer,
+    ATRPositionSizer,
+    KellyCriterionSizer,
+)
+from paperhands.risk.stops import (
+    StopLevel,
+    StopType,
+    StopLossManager,
+    FixedPercentageStop,
+    TrailingStopManager,
+    ATRTrailingStop,
+    MultiSymbolStopManager,
+)
 
 __all__ = [
     # Version
@@ -73,9 +92,24 @@ __all__ = [
     "AlpacaDataProvider",
     "EODHDProvider",
     "CachedDataProvider",
+    "get_sp500_symbols",
     # Execution
     "Broker",
     "BacktestBroker",
     # Portfolio
     "Portfolio",
+    # Risk management
+    "ATRCalculator",
+    "MultiSymbolATR",
+    "PositionSizer",
+    "FixedFractionalSizer",
+    "ATRPositionSizer",
+    "KellyCriterionSizer",
+    "StopLevel",
+    "StopType",
+    "StopLossManager",
+    "FixedPercentageStop",
+    "TrailingStopManager",
+    "ATRTrailingStop",
+    "MultiSymbolStopManager",
 ]

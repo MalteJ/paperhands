@@ -1,6 +1,6 @@
 """Backtesting engine."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import pandas as pd
 from tqdm import tqdm
@@ -37,7 +37,8 @@ class BacktestEngine:
         initial_cash: float = 100000.0,
         commission_per_share: float = 0.0,
         slippage_percent: float = 0.0,
-        timeframe: str = "1Day"
+        timeframe: str = "1Day",
+        warmup_days: int = 0
     ):
         """
         Initialize backtest engine.
@@ -46,12 +47,14 @@ class BacktestEngine:
             strategy: Strategy to backtest
             data_provider: Data provider for historical data
             symbols: List of symbols to trade
-            start_date: Backtest start date
+            start_date: Backtest start date (when trading/tracking begins)
             end_date: Backtest end date
             initial_cash: Starting cash
             commission_per_share: Commission per share
             slippage_percent: Slippage percentage
             timeframe: Bar timeframe (e.g., "1Hour", "1Day")
+            warmup_days: Number of days of historical data to load before start_date
+                        for indicator warmup (e.g., 365 for strategies needing 1 year lookback)
         """
         self.strategy = strategy
         self.data_provider = data_provider
@@ -59,6 +62,7 @@ class BacktestEngine:
         self.start_date = start_date
         self.end_date = end_date
         self.timeframe = timeframe
+        self.warmup_days = warmup_days
 
         # Initialize portfolio and broker
         self.portfolio = Portfolio(initial_cash=initial_cash)
@@ -86,10 +90,17 @@ class BacktestEngine:
         """Load historical data for all symbols."""
         print(f"Loading data for {len(self.symbols)} symbols...")
 
-        # Load data for all symbols
+        # Calculate data fetch start date (includes warmup period)
+        if self.warmup_days > 0:
+            data_start_date = self.start_date - timedelta(days=self.warmup_days)
+            print(f"Including {self.warmup_days} days warmup period (fetching from {data_start_date.date()})")
+        else:
+            data_start_date = self.start_date
+
+        # Load data for all symbols (including warmup period)
         bars_dict = self.data_provider.get_bars_multi(
             self.symbols,
-            self.start_date,
+            data_start_date,
             self.end_date,
             self.timeframe
         )
@@ -125,10 +136,26 @@ class BacktestEngine:
         # Get sorted timestamps
         timestamps = sorted(self.bars_by_time.keys())
 
-        # Progress bar
-        iterator = tqdm(timestamps, desc="Backtesting") if verbose else timestamps
+        # Separate warmup and live trading periods
+        warmup_timestamps = [ts for ts in timestamps if ts < self.start_date]
+        live_timestamps = [ts for ts in timestamps if ts >= self.start_date]
 
-        # Run through each timestamp
+        # Process warmup period (feed bars to strategy but don't track equity or allow trading)
+        if warmup_timestamps:
+            if verbose:
+                print(f"Processing {len(warmup_timestamps)} warmup bars...")
+            self.broker.disable_trading()  # Prevent orders during warmup
+            for timestamp in warmup_timestamps:
+                self.context.current_time = timestamp
+                bars = self.bars_by_time[timestamp]
+                for symbol, bar in bars.items():
+                    self.strategy.on_bar(bar)
+            self.broker.enable_trading()  # Re-enable trading for live period
+
+        # Progress bar for live trading period
+        iterator = tqdm(live_timestamps, desc="Backtesting") if verbose else live_timestamps
+
+        # Run through each timestamp (live trading period)
         for timestamp in iterator:
             self.context.current_time = timestamp
             bars = self.bars_by_time[timestamp]
@@ -358,3 +385,183 @@ class BacktestEngine:
             plt.show()
 
         return fig, (ax1, ax2)
+
+    def plot_portfolio(self, benchmark: str = None, show: bool = True):
+        """
+        Plot portfolio equity curve with buy/sell trade markers.
+
+        Best for multi-symbol strategies where plotting a single stock
+        price doesn't make sense.
+
+        Args:
+            benchmark: Optional benchmark symbol (e.g., "SPY") to compare against.
+                      Will be normalized to start at the same value as initial cash.
+            show: Whether to call plt.show() (set False if you want to customize further)
+
+        Returns:
+            matplotlib figure and axes (fig, ax)
+        """
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib.dates as mdates
+        except ImportError:
+            print("matplotlib is required for plotting. Install with: pip install matplotlib")
+            return None
+
+        # Get equity curve
+        equity_df = self.get_equity_curve()
+        if equity_df.empty:
+            print("No equity data available")
+            return None
+
+        # Get all trades
+        trades_df = self.get_trades()
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(14, 7))
+
+        # Plot equity curve
+        ax.plot(equity_df.index, equity_df['equity'], label='Portfolio', color='#2962FF', linewidth=1.5)
+
+        # Fill profit/loss areas
+        ax.fill_between(
+            equity_df.index,
+            self.portfolio.initial_cash,
+            equity_df['equity'],
+            where=(equity_df['equity'] >= self.portfolio.initial_cash),
+            alpha=0.3, color='#00C853', interpolate=True, label='Profit'
+        )
+        ax.fill_between(
+            equity_df.index,
+            self.portfolio.initial_cash,
+            equity_df['equity'],
+            where=(equity_df['equity'] < self.portfolio.initial_cash),
+            alpha=0.3, color='#FF1744', interpolate=True, label='Loss'
+        )
+
+        # Initial cash line
+        ax.axhline(y=self.portfolio.initial_cash, color='gray', linestyle='--', alpha=0.5, label='Initial Cash')
+
+        # Plot benchmark if provided
+        benchmark_return = None
+        if benchmark:
+            try:
+                benchmark_bars = self.data_provider.get_bars(
+                    benchmark, self.start_date, self.end_date, self.timeframe
+                )
+                if benchmark_bars:
+                    benchmark_df = pd.DataFrame([
+                        {'timestamp': bar.timestamp, 'close': bar.close}
+                        for bar in benchmark_bars
+                    ])
+                    benchmark_df.set_index('timestamp', inplace=True)
+
+                    # Normalize benchmark to start at initial cash value
+                    initial_benchmark_price = benchmark_df['close'].iloc[0]
+                    benchmark_df['normalized'] = (
+                        benchmark_df['close'] / initial_benchmark_price * self.portfolio.initial_cash
+                    )
+
+                    ax.plot(
+                        benchmark_df.index,
+                        benchmark_df['normalized'],
+                        label=f'{benchmark} (Buy & Hold)',
+                        color='#FF9800',
+                        linewidth=1.5,
+                        linestyle='--',
+                        alpha=0.8
+                    )
+
+                    # Calculate benchmark return for summary
+                    benchmark_return = (
+                        (benchmark_df['close'].iloc[-1] - initial_benchmark_price)
+                        / initial_benchmark_price * 100
+                    )
+            except Exception as e:
+                print(f"Could not load benchmark {benchmark}: {e}")
+
+        # Plot buy/sell markers on the equity curve
+        if not trades_df.empty:
+            # Map trade timestamps to equity values
+            buys = trades_df[trades_df['side'] == 'buy'].copy()
+            sells = trades_df[trades_df['side'] == 'sell'].copy()
+
+            if not buys.empty:
+                buy_times = pd.to_datetime(buys['timestamp'])
+                # Get equity values at buy times (use portfolio_value from trades if available)
+                if 'portfolio_value' in buys.columns:
+                    buy_values = buys['portfolio_value'].values
+                else:
+                    buy_values = buys['cash_after'].values
+                ax.scatter(
+                    buy_times,
+                    buy_values,
+                    marker='^',
+                    color='#00C853',
+                    s=60,
+                    label='Buy',
+                    zorder=5,
+                    edgecolors='white',
+                    linewidths=0.5,
+                    alpha=0.8
+                )
+
+            if not sells.empty:
+                sell_times = pd.to_datetime(sells['timestamp'])
+                if 'portfolio_value' in sells.columns:
+                    sell_values = sells['portfolio_value'].values
+                else:
+                    sell_values = sells['cash_after'].values
+                ax.scatter(
+                    sell_times,
+                    sell_values,
+                    marker='v',
+                    color='#FF1744',
+                    s=60,
+                    label='Sell',
+                    zorder=5,
+                    edgecolors='white',
+                    linewidths=0.5,
+                    alpha=0.8
+                )
+
+        ax.set_ylabel('Portfolio Value ($)', fontsize=11)
+        ax.set_xlabel('Date', fontsize=11)
+        ax.set_title(f'Portfolio Performance - {len(self.symbols)} symbols', fontsize=14, fontweight='bold')
+        ax.legend(loc='upper left')
+        ax.grid(True, alpha=0.3)
+
+        # Format x-axis dates
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        plt.xticks(rotation=45)
+
+        # Add summary text
+        if self.analytics:
+            metrics = self.analytics.calculate_metrics()
+            summary_parts = [
+                f"Return: {metrics['total_return_percent']:.1f}%",
+            ]
+            if benchmark_return is not None:
+                summary_parts.append(f"{benchmark}: {benchmark_return:.1f}%")
+            summary_parts.extend([
+                f"Sharpe: {metrics['sharpe_ratio']:.2f}",
+                f"Max DD: {metrics['max_drawdown']:.1f}%",
+                f"Win Rate: {metrics['win_rate']:.1f}%",
+                f"Trades: {metrics['total_trades']}",
+            ])
+            summary_text = " | ".join(summary_parts)
+            ax.text(
+                0.5, -0.12, summary_text,
+                transform=ax.transAxes,
+                fontsize=10,
+                ha='center',
+                color='gray'
+            )
+
+        plt.tight_layout()
+
+        if show:
+            plt.show()
+
+        return fig, ax

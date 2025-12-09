@@ -38,8 +38,24 @@ class BacktestBroker(Broker):
         # Track fills for event emission
         self.fill_events: List[FillEvent] = []
 
+        # Trading enabled flag (disabled during warmup period)
+        self._trading_enabled = True
+
+    def disable_trading(self):
+        """Disable order submission (used during warmup period)."""
+        self._trading_enabled = False
+
+    def enable_trading(self):
+        """Enable order submission."""
+        self._trading_enabled = True
+
     def submit_order(self, order: Order) -> Order:
         """Submit an order in the backtest."""
+        # Reject orders during warmup period
+        if not self._trading_enabled:
+            order.status = OrderStatus.REJECTED
+            return order
+
         # Generate order ID
         order.order_id = str(uuid.uuid4())
         order.status = OrderStatus.SUBMITTED
