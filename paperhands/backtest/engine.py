@@ -223,3 +223,138 @@ class BacktestEngine:
             return pd.DataFrame()
 
         return pd.DataFrame(self.portfolio.trade_history)
+
+    def plot_trades(self, symbol: Optional[str] = None, show: bool = True):
+        """
+        Plot price chart with buy/sell trade markers.
+
+        Args:
+            symbol: Symbol to plot. If None, uses first symbol in symbols list.
+            show: Whether to call plt.show() (set False if you want to customize further)
+
+        Returns:
+            matplotlib figure and axes tuple (fig, (ax1, ax2))
+        """
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib.dates as mdates
+        except ImportError:
+            print("matplotlib is required for plotting. Install with: pip install matplotlib")
+            return None
+
+        # Default to first symbol if not specified
+        if symbol is None:
+            symbol = self.symbols[0]
+
+        if symbol not in self.symbols:
+            print(f"Symbol {symbol} not in backtest symbols: {self.symbols}")
+            return None
+
+        # Get price data for the symbol
+        prices = []
+        for timestamp in sorted(self.bars_by_time.keys()):
+            if symbol in self.bars_by_time[timestamp]:
+                bar = self.bars_by_time[timestamp][symbol]
+                prices.append({
+                    'timestamp': timestamp,
+                    'open': bar.open,
+                    'high': bar.high,
+                    'low': bar.low,
+                    'close': bar.close
+                })
+
+        if not prices:
+            print(f"No price data for {symbol}")
+            return None
+
+        price_df = pd.DataFrame(prices)
+        price_df.set_index('timestamp', inplace=True)
+
+        # Get trades for this symbol
+        trades_df = self.get_trades()
+        if not trades_df.empty:
+            trades_df = trades_df[trades_df['symbol'] == symbol].copy()
+
+        # Create figure with two subplots: price chart and equity curve
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), height_ratios=[2, 1], sharex=True)
+
+        # Plot price line
+        ax1.plot(price_df.index, price_df['close'], label=f'{symbol} Close', color='#2962FF', linewidth=1.5)
+        ax1.fill_between(price_df.index, price_df['low'], price_df['high'], alpha=0.1, color='#2962FF')
+
+        # Plot buy/sell markers
+        if not trades_df.empty:
+            buys = trades_df[trades_df['side'] == 'buy']
+            sells = trades_df[trades_df['side'] == 'sell']
+
+            if not buys.empty:
+                ax1.scatter(
+                    pd.to_datetime(buys['timestamp']),
+                    buys['price'],
+                    marker='^',
+                    color='#00C853',
+                    s=100,
+                    label='Buy',
+                    zorder=5,
+                    edgecolors='white',
+                    linewidths=1
+                )
+
+            if not sells.empty:
+                ax1.scatter(
+                    pd.to_datetime(sells['timestamp']),
+                    sells['price'],
+                    marker='v',
+                    color='#FF1744',
+                    s=100,
+                    label='Sell',
+                    zorder=5,
+                    edgecolors='white',
+                    linewidths=1
+                )
+
+        ax1.set_ylabel('Price ($)', fontsize=11)
+        ax1.set_title(f'{symbol} - Backtest Results', fontsize=14, fontweight='bold')
+        ax1.legend(loc='upper left')
+        ax1.grid(True, alpha=0.3)
+
+        # Plot equity curve
+        equity_df = self.get_equity_curve()
+        if not equity_df.empty:
+            ax2.plot(equity_df.index, equity_df['equity'], label='Portfolio Value', color='#7C4DFF', linewidth=1.5)
+            ax2.fill_between(equity_df.index, self.portfolio.initial_cash, equity_df['equity'],
+                           where=(equity_df['equity'] >= self.portfolio.initial_cash),
+                           alpha=0.3, color='#00C853', interpolate=True)
+            ax2.fill_between(equity_df.index, self.portfolio.initial_cash, equity_df['equity'],
+                           where=(equity_df['equity'] < self.portfolio.initial_cash),
+                           alpha=0.3, color='#FF1744', interpolate=True)
+            ax2.axhline(y=self.portfolio.initial_cash, color='gray', linestyle='--', alpha=0.5, label='Initial Cash')
+
+        ax2.set_ylabel('Portfolio Value ($)', fontsize=11)
+        ax2.set_xlabel('Date', fontsize=11)
+        ax2.legend(loc='upper left')
+        ax2.grid(True, alpha=0.3)
+
+        # Format x-axis dates
+        ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
+        plt.xticks(rotation=45)
+
+        # Add summary text
+        if self.analytics:
+            metrics = self.analytics.calculate_metrics()
+            summary_text = (
+                f"Return: {metrics['total_return_percent']:.1f}% | "
+                f"Sharpe: {metrics['sharpe_ratio']:.2f} | "
+                f"Max DD: {metrics['max_drawdown']:.1f}% | "
+                f"Win Rate: {metrics['win_rate']:.1f}% | "
+                f"Trades: {metrics['total_trades']}"
+            )
+            fig.suptitle(summary_text, fontsize=10, y=0.02, color='gray')
+
+        plt.tight_layout()
+
+        if show:
+            plt.show()
+
+        return fig, (ax1, ax2)

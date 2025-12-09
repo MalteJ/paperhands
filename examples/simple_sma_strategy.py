@@ -136,3 +136,6 @@ if __name__ == "__main__":
     if not trades.empty:
         print(f"\nTrade History:")
         print(trades.to_string())
+
+    # Plot the trades on a chart (requires matplotlib: pip install matplotlib)
+    engine.plot_trades()
